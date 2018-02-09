@@ -1,0 +1,8 @@
+: antonyms
+public private large tiny
+big small near far
+public private big small
+: synonyms
+big large small tiny
+little small fast quick
+tough hard simple easy
