@@ -1,0 +1,40 @@
+EXPLANATION OF FEATUES:
+The features (in the order they have been added) added to improve the accuracy of Naive Baye's are descibed below:
+
+1. Last two characters of text
+   Clearly, there is difference between how lines end in Bronte's and Shakespeare's work respectively. Shakespeare's lines always place punctuation marks (if any) right after the last letter without space. However, in Bronte's lines, if the punctuation is a period(.) or a comma(,), it is placed immediately after the last letter without any space. Any other punctuation is placed after a space in Bronte's lines. Hence, the last two characters of the text (before any kind of preprocessing is done) is added as a feature.
+
+2. Last three characters of text
+   On similar lines as Feature 1, the last three characters of the text (before any kind of preprocessing is done) is added as a feature.
+
+3. Last four characters of text
+   On similar lines as Feature 1, the last four characters of the text (before any kind of preprocessing is done) is added as a feature.
+
+4. Unigrams (Bag of Words)
+   Firstly, every input sentence is tokenized into tokens. Then the tokens which are stop words and exclusively punctuations are removed as they don't help in determining if text is written by Shakespeare or Bronte. Then, for each of the remaining word in the sentence, the root form of the word is got after morphologial analysis and then the multiplicity of words is recorded as a feature in the dictionary of features. This feature seems helpful in identifying certain words that are more common in Bronte's and Shakespeare's respectively.
+
+5. Trigrams 
+   The text after tokenization (before removing stop words and punctuation) is divided into groups of three. Frequency of these trigrams are added as a feature. This feature seems helpful in identifying groups of three tokens that commonly occur together in Bronte's and Shakespeare's work respectively.
+
+6. Character count
+   The sentence is split into tokens (punctuations and stop words are not removed yet). The number of characters in each token is found. They are summed to find number of characters in the whole sentence. This is recorded as a feature. There is clearly a variation in the character count in Bronte's and Shakespeare's work, where in the number of charcaters in one is a significant multiple of the other.
+
+7. Word Count
+   After tokenizing the sentence (before stop words and punctuations are removed), the number of words is added as a feature to the feature dictionary. There is a variation in the word count too in Bronte's and Shakespeare's work, where in the number of words in one is a multiple of the other.
+
+  
+The features that did not help in improving the accuracy:
+1. POS Tagging
+   The text was POS Tagged and the entire POS tag sequence for the sentence was added as a feature. Also, the frequecy of various POS tags of a sentence was added as a feature. However, they both failed to improve the accuracy of the Naive Baye's classifier.
+
+2. First word and Last word
+   The first and last token of a sentence was added as a feature. However, this feature decreased the accuracy of the classifier. This shows that there is no pattern in the first and last words of sentences.
+
+3. Bigrams
+   Frequency of bigrams were added as a feature. However, this too decreased the accuracy. It looks like a sequence of three words (trigrams) are more useful for classification, than a sequence of two words.
+
+4. Numericals
+   In Emily Bronte's work, there are several numericals (ex. 4, 1) and so on. There are no such numericals in Shakespeare's work. However, due to the small number of occurences of such numericals in Bronte's work, this feature failed to work.
+
+5. Fully Uppercase Words
+   In Emily Bronte's work, there are several words that are in full uppercase (Ex. WELL, COMPANIONS). There are no such fully uppercased words in Shakespeare's work. However, due to the small number of occurences of such words in Bronte's work, this feature failed to improve accuracy of the classifier.
