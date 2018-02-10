@@ -1,0 +1,263 @@
+#!/usr/bin/env python
+import argparse
+import math
+import nltk
+import string
+# nltk.download('stopwords')
+from itertools import islice
+
+import re
+from string import punctuation
+
+from nltk.corpus import wordnet as wn
+from nltk.corpus import stopwords
+
+#import spacy
+#nlp = spacy.load('en')
+
+import nltk, string
+from sklearn.feature_extraction.text import TfidfVectorizer
+
+
+
+# find synsets using word net
+def find_synsets(word):
+    syn = []
+    for s in wn.synsets(unicode(word, 'utf-8')):
+        for lemma in s.lemmas():
+            syn.append(lemma.name().encode('utf-8'))
+    return set(syn)
+
+
+# find n-grams
+def find_ngrams(sentence, n):
+    ngrams = []
+    for i in range(len(sentence) - n + 1):
+        ngrams.append(' '.join(s for s in sentence[i:i+n]))
+    return ngrams
+
+
+# word count features
+def word_count(hypo, reference):
+    h_len = len(hypo); h_function = 0; h_punc = 0; h_content = 0;
+    ref_len = len(reference); ref_function = 0; ref_punc = 0; ref_content = 0
+
+    for word in hypo:
+        if word in stopwords.words('english'):
+            h_function += 1
+        elif word in string.punctuation:
+            h_punc += 1
+        else:
+            h_content += 1
+
+    for word in reference:
+        if word in stopwords.words('english'):
+            ref_function += 1
+        elif word in string.punctuation:
+            ref_punc += 1
+        else:
+            ref_content += 1
+
+
+# pos tag
+def pos_tag(h, ref):
+    hypo = [word for word in h if word not in ['', ' ']]
+    reference = [word for word in ref if word not in ['', ' ']]
+
+    h_pos = [p[1] for p in nltk.pos_tag(hypo)]
+    ref_pos = [p[1] for p in nltk.pos_tag(reference)]
+
+    return [h_pos, ref_pos]
+
+
+# find bleu score with 1 smoothing
+def bleu_score(h, ref):
+    if len(h) == 0 or len(ref) == 0:
+        return 0
+    h_1g = find_ngrams(h, 1); h_2g = find_ngrams(h, 2); h_3g = find_ngrams(h, 3); h_4g = find_ngrams(h, 4)
+
+    precision_1g = float(sum(1 for w in h_1g if w in find_ngrams(ref, 1)) + 1) / (len(h_1g) + 1)
+    precision_2g = float(sum(1 for w in h_2g if w in find_ngrams(ref, 2)) + 1) / (len(h_2g) + 1)
+    precision_3g = float(sum(1 for w in h_3g if w in find_ngrams(ref, 3)) + 1) / (len(h_3g) + 1)
+    precision_4g = float(sum(1 for w in h_4g if w in find_ngrams(ref, 4)) + 1) / (len(h_4g) + 1)
+
+    brevity_penalty = 1 if len(h) > len(ref) else math.exp(1 - float(len(ref)) / len(h))
+    return brevity_penalty * math.pow((precision_1g * precision_2g * precision_3g * precision_4g), 0.25)
+
+
+# find meteor score without wordnet
+def meteor_score_without_wordnet(h, ref):
+    # F - MEASURE
+    unigram_matches = sum(1 for w in h if w in ref)
+    if unigram_matches == 0:
+        return 0
+    recall = float(unigram_matches) / len(ref)
+    precision = float(unigram_matches) / len(h)
+    alpha = 0.9
+    f_measure = (precision * recall) / (((1 - alpha) * recall) + (alpha * precision))
+
+    # CHUNKS
+    i = 0
+    chunks_list = []
+
+    while i < len(h):
+        w = h[i]
+
+        # one word match
+        if str(w) in ref:
+            # check for subsequent words
+            next_hypo = i + 1
+            next_ref = ref.index(w) + 1
+
+            while next_hypo < len(h) and next_ref < len(ref) and (h[next_hypo] == ref[next_ref]):
+                next_hypo += 1
+                next_ref += 1
+            chunk = ''
+            for index in range(i, next_hypo):
+                chunk += h[index] + ' '
+            chunks_list.append(chunk)
+            i = next_hypo
+        else:
+            i += 1
+    number_chunks = len(chunks_list)
+
+    # PENALTY
+    penalty = 0.5 * number_chunks / unigram_matches
+
+    # METEOR
+    return f_measure * (1.0 - penalty)
+
+
+# find meteor score with wordnet
+def meteor_score_wordnet(h, ref):
+    # F - MEASURE
+    unigram_matches = sum(1 for w in h if w in ref or not find_synsets(w).isdisjoint(set(ref)))
+    if unigram_matches == 0:
+        return 0
+    recall = float(unigram_matches) / len(ref)
+    precision = float(unigram_matches) / len(h)
+    alpha = 0.9
+    f_measure = (precision * recall) / (((1 - alpha) * recall) + (alpha * precision))
+
+    # CHUNKS
+    i = 0
+    chunks_list = []
+
+    while i < len(h):
+        w = h[i]
+        syn = find_synsets(w)
+
+        # one word match
+        if str(w) in ref or not syn.isdisjoint(set(ref)):
+
+            # check for subsequent words
+            next_hypo = i + 1
+
+            if str(w) not in ref:
+                next_ref = ref.index(list(syn.intersection(ref))[0]) + 1
+            else:
+                next_ref = ref.index(w) + 1
+
+            while next_hypo < len(h) and next_ref < len(ref) and (h[next_hypo] == ref[next_ref] or ref[next_ref] in list(find_synsets(h[next_hypo]))):
+                next_hypo += 1
+                next_ref += 1
+
+            chunk = ''
+            for index in range(i, next_hypo):
+                chunk += h[index] + ' '
+            chunks_list.append(chunk)
+
+            i = next_hypo
+        else:
+            i += 1
+    number_chunks = len(chunks_list)
+
+    # PENALTY
+    penalty = 0.5 * number_chunks / unigram_matches
+
+    # METEOR
+    return f_measure * (1.0 - penalty)
+
+
+def cos_sim(h, ref):
+    tfidf = TfidfVectorizer().fit_transform([h, ref])
+    return ((tfidf * tfidf.T).A)[0, 1]
+
+
+def word_matches(hypo, reference):
+    # strip punctuatiop and spaces
+    h = []
+    for w in hypo:
+        if w in string.punctuation or w in ['', ' ']:
+            pass
+        else:
+            temp = w.strip(punctuation)
+            if temp not in ['', ' ']:
+                h.append(re.sub('[^A-Za-z0-9]+', '', temp))
+            else:
+                pass
+
+    ref = []
+    for w in reference:
+        if w in string.punctuation or w in ['', ' ']:
+            pass
+        else:
+            temp = w.strip(punctuation)
+            if temp not in ['', ' ']:
+                ref.append(re.sub('[^A-Za-z0-9]+', '', temp))
+            else:
+                pass
+
+    # count = word_count(hypo, reference)
+    pos_tags = pos_tag(h, ref)
+    pos_bleu = bleu_score(pos_tags[0], pos_tags[1])
+    # bleu = bleu_score(h, ref)
+
+    meteor = meteor_score_wordnet(h, ref)
+    # pos_meteor = meteor_score_without_wordnet(pos_tags[0], pos_tags[1])
+
+    str_h = ' '.join(h)
+    str_ref = ' '.join(ref)
+    # cos_sim = (nlp(str_h.decode('utf-8'))).similarity(nlp(str_ref.decode('utf-8')))
+    cos = cos_sim(str_h, str_ref)
+
+    # return 0.1 * pos_bleu + 0.05 * meteor + 0.85 * pos_meteor
+    return 0.15 * pos_bleu + 0.60 * meteor + 0.25 * cos
+
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Evaluate translation hypotheses.')
+    parser.add_argument('-i', '--input', default='data/hyp1-hyp2-ref', help='input file (default data/hyp1-hyp2-ref)')
+    parser.add_argument('-n', '--num_sentences', default=None, type=int, help='Number of hypothesis pairs to evaluate')
+    # note that if x == [1, 2, 3], then x[:None] == x[:] == x (copy); no need for sys.maxint
+    opts = parser.parse_args()
+
+    # we create a generator and avoid loading all sentences into a list
+    def sentences():
+        with open(opts.input) as f:
+            for pair in f:
+                yield [sentence.strip().split() for sentence in pair.split(' ||| ')]
+
+    # note: the -n option does not work in the original code
+    for h1, h2, ref in islice(sentences(), opts.num_sentences):
+        rset = set(ref)
+        h1_match = word_matches(h1, ref)
+        h2_match = word_matches(h2, ref)
+
+        print(1 if h1_match > h2_match else # \begin{cases}
+                (0 if h1_match == h2_match
+                    else -1)) # \end{cases}
+
+
+    """
+    h = ['Israeli', 'officials', 'responsibility', 'for', 'home', 'safety.', '.']
+    ref = ['Israeli', 'officials', 'are', 'responsibility', 'for', 'house', 'guard.', '.']
+    word_matches(h, ref)
+    """
+
+
+
+# convention to allow import of this file as a module
+if __name__ == '__main__':
+    main()
