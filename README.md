@@ -2,7 +2,7 @@
 
 This repository contains the homeworks for CSCI 544 — Applied Natural Language Processing, Fall 2017.
 
-Homework 1: Limerick Detector
+Homework 1: Limerick Detector </br>
 Homework 2: Finite State Adventures, Census Nomenclature, Number Translation, and a Little Light Morphology
 Homework 3: Feature Engineering for Authorship Identification
 Homework 4: Parsing
